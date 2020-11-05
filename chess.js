@@ -1,230 +1,288 @@
 class Game {
-    constructor(board, settings) {
+    constructor(board) {
         this.storage = [];
         this.board = board;
-        this.settings = settings;
         this.player = 'white';
         this.counterMove = 0;
         this.killedFigures = [];
         this.errors = null;
     }
 
+    /**
+     *   метод startGame - запускаем игру. Генерируем доску и раставляем фигуры, далее сохраняем растоновку в storage
+     */
     startGame() {
-       const board = this.board.resetMap();
-       this.storage.push(board);
+        const board = this.board.resetMap();
+        this.storage.push(board);
 
-       this.initErrors();
+        this.initErrors();
     }
 
     initErrors() {
         this.errors = {
-                valid: 'Неверные координаты',
-                player: 'Сейчас ходит соперник',
-                opponentFigures: 'Это фигура соперника',
-                notDefined: 'Фигура не определена',
-                validMove: 'Это фигура так не ходит',
-                figureOnWay: 'Вы не можете сделать ход, так как на пути стоят ваши фигуры'
+            valid: 'Неверные координаты',
+            player: 'Сейчас ходит соперник',
+            validMove: 'Ход не верный'
         }
     }
 
-    static searchFigure(storage, pos) {
+    /**
+     * Ищем фигуру на заданной позиции
+     * @param pos  - позиции, на которой лежит фигура
+     * @param storage - объект, где храняться фигуры
+     * @returns {*} - вернет фигуру
+     */
+
+    static searchFigure(pos, storage) {
         return storage[pos];
     }
 
-    static checkPlayer(type, player) {
-        return type === player;
+    /**
+     * Проверяем тип игрока
+     * @param typePlayer - тип либо черный либо белый
+     * @returns {boolean} - если тип верен возвращаем true, иначе false
+     */
+
+    checkPlayer(typePlayer) {
+        return typePlayer === this.player;
     }
 
-    static checkColorFigureAndPlayer(typePlayer, figure) {
-        return typePlayer === figure.color
-    }
+    /**
+     * Проверяяем на можно ли сделать ход по заданной траектории
+     * @param startPos - страртовая позиуия
+     * @param endPos - конечная позиция
+     * @returns {boolean|boolean|*} - вернет true если все условия для этого выполнены
+     */
+    canMove(startPos, endPos) {
+        const lastChangeGame = this.storage[this.storage.length - 1];
+        const myFigure = Game.searchFigure(startPos, lastChangeGame);
+        const otherFigure = Game.searchFigure(endPos, lastChangeGame);
 
-    static switcherPlayer(player) {
-        return (player === 'white') ? 'black' : 'white'
-    }
-
-    static searchFiguresOnWay(startPos, endPos, storage) {
-        const searchFigures = [];
-
-        for (let figurePos in storage) {
-            const x = +figurePos[0];
-            const y = +figurePos[1];
-
-            if ((startPos.x < x && x <= endPos.x) && (startPos.y < y && y <= endPos.y)) {
-                searchFigures.push(storage[figurePos]);
-            }
+        const canMoveFrom = this.canMoveFrom(startPos, myFigure);
+        const canMoveTo = this.canMoveTo(endPos, otherFigure);
+        if (!canMoveFrom) {
+            return false;
         }
 
-        if (searchFigures.length !== 0) {
-            return searchFigures;
+        let isCorrectMove = false;
+
+        if (myFigure instanceof Rock || myFigure instanceof Bishop || myFigure instanceof Queen) {
+            isCorrectMove = myFigure.checkMove(startPos, endPos, lastChangeGame, myFigure);
+
+        } else {
+            isCorrectMove = myFigure.checkMove(startPos, endPos, myFigure, lastChangeGame);
+        }
+
+        return canMoveFrom && canMoveTo && isCorrectMove;
+    }
+
+
+    /**
+     *  Проверяем на наличие фигуры и на соотвествие цвета фигуры с цветом игрока в стартовой позиции
+     * @param pos - стартовая позиция
+     * @param figure - фигура, лежащая на этой позиции
+     * @returns {boolean} - вернет true если на позиции pos есть фигура или цвет фигуры и цвет игрока не совпадают
+     */
+    canMoveFrom(pos, figure) {
+
+        if (!figure || figure.color !== this.player) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    /**
+     *  Проверяем на наличие фигуры и на соотвествие цвета фигуры с цветом игрока в конечной позиции
+     * @param pos - конечная позиция
+     * @param figure - фигура, лежащая на этой позиции
+     * @returns {boolean} - вернет true если на позиции pos есть фигура или цвет фигуры и цвет игрока не совпадают
+     */
+    canMoveTo(pos, figure) {
+
+        if (!figure || figure.color !== this.player) {
+            return true;
         } else {
             return false;
         }
     }
 
-    static killFigure(color, figures) {
-        const killFigure = figures.find( figure => figure.color === color );
+    /**
+     * Переключатель между игроками
+     * @returns {string} - вернет состояние либо 'black' либо 'white'
+     */
 
-        if (!killFigure) return false;
-
-        return killFigure;
+    switcherPlayer() {
+        return (this.player === 'white') ? 'black' : 'white';
     }
 
 
+    /**
+     * Осуществляем движение фигуры по заданной траектории, если траектория не верна вернется ошибка!!!
+     * @param typePlayer  - тип игрока
+     * @param startPos - страртовая позиция
+     * @param endPos  - конечная позиция
+     * @returns {string}
+     */
     move(typePlayer, startPos, endPos) {
 
-       // проверяем валидные ли данные
-       if (startPos && endPos && typeof startPos === 'string' && typeof endPos === "string") {
-           const isRightTypePlayer = Game.checkPlayer(typePlayer, this.player);
+        // проверяем валидные ли данные
+        if (!(startPos && endPos && typeof startPos === 'string' && typeof endPos === "string")) return this.errors.valid;
+        const isRightTypePlayer = this.checkPlayer(typePlayer);
 
-           // проверяем тип игрока, игрок должен быть либо черным либо белым и меняться поочередно
-           if (isRightTypePlayer) {
-               const lastChangeGame = this.storage[this.storage.length - 1];
+        // проверяем тип игрока, игроки должны меняться поочередно, начиная с белого
+        if (!isRightTypePlayer) return this.errors.player;
 
-               const myFigure = Game.searchFigure(lastChangeGame, startPos);
+        const canMove = this.canMove(startPos, endPos);
 
-               // в случае если фигура не определена, метод move прекращает работу
-               if (!myFigure) return this.errors.notDefined;
-               const isSameColorFigureAndPlayer = Game.checkColorFigureAndPlayer(typePlayer, myFigure);
+        // проверяем на определение фигуры и на наличие совпадения цвета игрока с цветом фигуры, а также на всевозможные ходы фигуры
+        if (!canMove) return this.errors.validMove;
 
-               // проверяем, чтобы игрок ходил только по своим фигурами, а не по фигурам соперника
-               if (isSameColorFigureAndPlayer) {
+        const storage = this.storage[this.storage.length - 1];
+        const figure = Game.searchFigure(startPos, storage);
 
-                   const posObjSt = this.settings.convertToObj(startPos);
-                   const posObjEnd = this.settings.convertToObj(endPos);
+        const newMap = this.board.changeMap(startPos, endPos, figure, this.storage[this.storage.length - 1]);
+        this.storage.push(newMap);
 
-                   let isValidMove;
+        console.log(this.storage);
 
-                   if (myFigure instanceof Pawn) {
-                       isValidMove = myFigure.checkMove(this.counterMove, posObjSt, posObjEnd);
-                   } else {
-                       isValidMove = myFigure.checkMove(posObjSt, posObjEnd);
-                   }
-
-
-                   // проверяем, чтобы ход фигуры был валидным. Если ход не правильный, выйти из функции
-                   if (isValidMove) {
-                       const searchedFigures = Game.searchFiguresOnWay(posObjSt, posObjEnd, lastChangeGame);
-
-
-                       // находим фигуры, лежащие на пути. Если их нет, то делаем ход
-                       if (!searchedFigures) {
-
-                           const nextBoardMap = this.board.changeMap(startPos, endPos, myFigure, lastChangeGame);
-                           this.storage.push(nextBoardMap);
-
-
-                           this.player = Game.switcherPlayer(this.player, typePlayer);
-                           this.counterMove++;
-
-                           // если есть фигура на пути, то проверяем вражеские ли фигуры, если да, то убиваем ее и становимся на ее место
-                       } else {
-                           const killedFigure = Game.killFigure(this.player, searchedFigures);
-
-                           // если фигуры свои, то выводим сообщение, что так ходить нельзя
-                           if (!killedFigure) {
-                                return this.errors.figureOnWay;
-                           }
-
-                           console.log(this.storage);
-                           this.killedFigures.push(killedFigure);
-
-                           const nextBoardMap = this.board.changeMap(startPos, killedFigure.pos, myFigure, lastChangeGame);
-                           this.storage.push(nextBoardMap);
-
-                           this.player = Game.switcherPlayer(this.player, typePlayer);
-                           this.counterMove++;
-                       }
-
-                   } else {
-                       return this.errors.validMove
-                   }
-
-               } else {
-                   return this.errors.opponentFigures;
-               }
-
-          } else  {
-               return this.errors.player;
-           }
-       } else {
-           return this.errors.valid;
-       }
+        this.player = this.switcherPlayer();
     }
 
     getStorage() {
         return this.storage;
     }
-
-    getCounterMove() {
-        return `C начала игры прошло ${this.counterMove} ходов`;
-    }
-
 }
 
 class Board {
-    #mapFigures;
 
-    constructor() {
-       this.#mapFigures = {};
-    }
+    constructor() { }
 
     static #sizeBoard = 8;
 
-    // генерируем шахматное поле и располагаем на нем фигуры
+    /**
+     * Генерируем доску и раставляем фигуры
+     * @returns {{}} - возворащаем расположение фигур
+     */
     resetMap() {
+        const map = {};
 
         for (let i = 1; i <= Board.#sizeBoard; i++) {
             for (let j = 1; j <= Board.#sizeBoard; j++) {
                 let pos = `${j}${i}`;
 
                 if (i === 2) {
-                    this.#mapFigures[pos] =  new Pawn('white', pos);
+                    map[pos] = new Pawn('white');
                 } else if (i === 7) {
-                    this.#mapFigures[pos] =  new Pawn('black', pos);
+                    map[pos] = new Pawn('black');
                 } else if (i === 1 && (j === 1 || j === 8)) {
-                    this.#mapFigures[pos] =  new Rock('white', pos);
+                    map[pos] = new Rock('white');
                 } else if (i === 8 && (j === 1 || j === 8)) {
-                    this.#mapFigures[pos] =  new Rock('black', pos);
-                } else if  (i === 1 && (j === 2 || j === 7)) {
-                    this.#mapFigures[pos] =  new Knight('white', pos);
+                    map[pos] = new Rock('black');
+                } else if (i === 1 && (j === 2 || j === 7)) {
+                    map[pos] = new Knight('white');
                 } else if (i === 8 && (j === 2 || j === 7)) {
-                    this.#mapFigures[pos] =  new Knight('black', pos);
+                    map[pos] = new Knight('black');
                 } else if (i === 1 && (j === 3 || j === 6)) {
-                    this.#mapFigures[pos] =  new Bishop('white', pos)
+                    map[pos] = new Bishop('white')
                 } else if (i === 8 && (j === 3 || j === 6)) {
-                    this.#mapFigures[pos] =  new Bishop('black', pos);
+                    map[pos] = new Bishop('black');
                 } else if (i === 1 && j === 4) {
-                    this.#mapFigures[pos] =  new Queen('white', pos);
+                    map[pos] = new Queen('white');
                 } else if (i === 8 && j === 4) {
-                    this.#mapFigures[pos] =  new Queen('black', pos);
+                    map[pos] = new Queen('black');
                 } else if (i === 1 && j === 5) {
-                    this.#mapFigures[pos] =  new King('white', pos);
+                    map[pos] = new King('white');
                 } else if (i === 8 && j === 5) {
-                    this.#mapFigures[pos] =  new King('black', pos);
+                    map[pos] = new King('black');
                 }
             }
         }
 
-        return this.#mapFigures;
+        return map;
     }
 
-    // изменяем шахматное поле. Меняем растановку фигур
-    changeMap(pos, nextPos, myFigure, storage) {
-        const copyMap = Object.assign({}, storage);
+    /**
+     * Изменяем расположение фигуры, перегенерирум шахм.доску
+     * @param pos - начальная позиция фигуры
+     * @param nextPos - конечная позиция фигуры
+     * @param myFigure - сама фигура
+     * @param map - последние изменения
+     * @returns {*}
+     */
+    changeMap(pos, nextPos, myFigure, map) {
+        const newMap = Object.assign({}, map);
+        let copyFigure;
 
-        delete copyMap[pos];
-        copyMap[nextPos] = myFigure;
+        if (myFigure instanceof Pawn) {
+            copyFigure = Object.assign(new Pawn(), myFigure);
+        } else if (myFigure instanceof Rock) {
+            copyFigure = Object.assign(new Rock(), myFigure);
+        } else if (myFigure instanceof Bishop) {
+            copyFigure = Object.assign(new Bishop(), myFigure);
+        } else if (myFigure instanceof Queen) {
+            copyFigure = Object.assign(new Queen(), myFigure);
+        } else if (myFigure instanceof King) {
+            copyFigure = Object.assign(new King(), myFigure);
+        } else if (myFigure instanceof Knight) {
+            copyFigure = Object.assign(new Knight(), myFigure);
+        }
 
-        return copyMap
+        delete newMap[pos];
+        newMap[nextPos] = copyFigure;
+
+        return newMap;
     }
 }
 
+
+
 class Figure {
 
-    constructor(color, pos) {
+    constructor(color) {
         this.color = color;
-        this.pos = pos;
+    }
+
+    isOnMapFigure(st, storage) {
+        const keys = Object.keys(storage);
+
+        return keys.some((pos => st === pos));
+    }
+
+    isCorrectLineMove(st, end, data, figure) {
+        let delta_x = Math.sign(end.x - st.x);
+        let delta_y = Math.sign(st.y - end.y);
+
+        if (figure instanceof Bishop) {
+            if (Math.abs(delta_x) + Math.abs(delta_y) != 2) {
+                return false;
+            }
+        } else if (figure instanceof Rock) {
+            if (Math.abs(delta_x) + Math.abs(delta_y) != 1) {
+                return false;
+            }
+        }
+
+        do {
+            st.x += delta_x;
+            st.y += delta_y;
+
+            if (st.x === end.x && st.y === end.y) return true;
+
+            if (this.isOnMapFigure(st.x.toString() + st.y.toString(), data)) {
+                return false;
+            }
+
+        } while (st.x >= 1 && st.x <= 8 && st.y >= 1 && st.y <= 7)
+
+        return true;
+    }
+
+    convertToObj(str) {
+
+        const x = +str[0];
+        const y = +str[1];
+
+        return { x, y };
     }
 }
 
@@ -235,165 +293,116 @@ class Pawn extends Figure {
         super(color, pos);
 
         this.#isAnotherFigure = false;
-        this.name = 'пешка';
     }
 
-    checkMove(counter, startPos, endPos) {
-        let isRightMove = false;
+    isCorrectPawnMove(startPos, endPos, storage, sign) {
+        const st = this.convertToObj(startPos);
+        const end = this.convertToObj(endPos);
 
-        if (endPos.x >= 0 && endPos.x < 8 && endPos.y >= 0 && endPos.y < 8) {
-            const dy = endPos.y - startPos.y;
-
-            if (counter <= 2) {
-                if (Math.abs(dy) === 1 || Math.abs(dy) === 2)  {
-                    isRightMove = true;
-                }
-            } else {
-                if (Math.abs(dy) === 1) {
-                    isRightMove = true;
-                }
-            }
-
-            return isRightMove;
+        if (st.y < 2 || st.y > 7) return false;
+        if (this.isOnMapFigure(endPos, storage)) {
+            if (Math.abs(end.x - st.x) !== 1) return false;
+            return end.y - st.y === sign;
         }
+        if (end.x !== st.x) return false;
+        if (end.y - st.y === sign) return true;
+        if (end.y - st.y === sign * 2) {
+            const newSt = st.x.toString() + (st.y + sign).toString();
+
+            return !this.isOnMapFigure(newSt, storage);
+        }
+    }
+
+    checkMove(startPos, endPos, figure, storage) {
+        if (figure.color === "white") return this.isCorrectPawnMove(startPos, endPos, storage, +1);
+        if (figure.color === "black") return this.isCorrectPawnMove(startPos, endPos, storage, -1)
     }
 }
 
 class Rock extends Figure {
     constructor(color, pos) {
         super(color, pos);
-
-        this.name = 'ладья';
     }
 
-    checkMove(startPos, endPos) {
-        let isRightMove = false;
+    checkMove(startPos, endPos, storage, figure) {
+        const st = this.convertToObj(startPos);
+        const end = this.convertToObj(endPos);
 
-        if (endPos.x >= 1 || endPos.x <= 8 && endPos.y >= 1 || endPos.y <= 8) {
-
-            if (endPos.x === startPos.x || endPos.y === startPos.y) {
-                isRightMove = true;
-            }
-
-            return isRightMove;
-        }
+        return this.isCorrectLineMove(st, end, storage, figure);
     }
 }
 
 class Knight extends Figure {
     constructor(color, pos) {
         super(color, pos);
-
-        this.name = 'конь';
     }
 
     checkMove(startPos, endPos) {
         let isRightMove = false;
 
-        if (endPos.x >= 0 && endPos.x < 8 && endPos.y >= 0 && endPos.y < 8) {
-            const dx = endPos.x - startPos.x;
-            const dy = endPos.y - startPos.y;
+        const dx = +endPos['0'] - +startPos['0'];
+        const dy = +endPos['1'] - +startPos['1'];
 
-            if ((Math.abs(dx) === 1 && Math.abs(dy) === 2) || (Math.abs(dx) === 2 && Math.abs(dy) === 1)) {
-                isRightMove = true;
-            }
-
-            return isRightMove;
+        if ((Math.abs(dx) === 1 && Math.abs(dy) === 2) || (Math.abs(dx) === 2 && Math.abs(dy) === 1)) {
+            isRightMove = true;
         }
+
+        return isRightMove;
     }
 }
 
 class Bishop extends Figure {
     constructor(color, pos) {
         super(color, pos);
-
-        this.name = 'слон';
     }
 
-    checkMove(startPos, endPos) {
-        let isRightMove = false;
+    checkMove(startPos, endPos, storage, figure) {
+        const st = this.convertToObj(startPos);
+        const end = this.convertToObj(endPos);
 
-        if (endPos.x >= 0 && endPos.x < 8 && endPos.y >= 0 && endPos.y < 8) {
-            const dx = endPos.x - startPos.x;
-            const dy = endPos.y - startPos.y;
-
-            if (Math.abs(dx) ===  Math.abs(dy)) {
-                isRightMove = true;
-            }
-
-            return isRightMove;
-        }
+        return this.isCorrectLineMove(st, end, storage, figure);
     }
 }
 
 class Queen extends Figure {
     constructor(color, pos) {
         super(color, pos);
-
-        this.name = 'ферзь';
     }
 
-    checkMove(startPos, endPos) {
-        let isRightMove = false;
+    checkMove(startPos, endPos, storage) {
+        const st = this.convertToObj(startPos);
+        const end = this.convertToObj(endPos);
 
-        if (endPos.x >= 0 && endPos.x < 8 && endPos.y >= 0 && endPos.y < 8) {
-            const dx = endPos.x - startPos.x;
-            const dy = endPos.y - startPos.y;
-
-            if ((Math.abs(dx) === Math.abs(dy)) || ((startPos.x === endPos.y) || (startPos.y === endPos.y))) {
-                isRightMove = true;
-            }
-
-            return isRightMove;
-        }
+        return this.isCorrectLineMove(st, end, storage);
     }
 }
 
 class King extends Figure {
     constructor(color, pos) {
         super(color, pos);
-
-        this.name = 'король';
     }
 
     checkMove(startPos, endPos) {
         let isRightMove = false;
 
-        if (endPos.x >= 0 && endPos.x < 8 && endPos.y >= 0 && endPos.y < 8) {
-            const dx = endPos.x - startPos.x;
-            const dy = endPos.y - startPos.y;
+        const dx = +endPos['0'] - +startPos['0'];
+        const dy = +endPos['1'] - +startPos['1'];
 
-            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
-                isRightMove = true;
-            }
-
-            return isRightMove;
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+            isRightMove = true;
         }
+
+        return isRightMove;
     }
 }
 
-class Settings {
-    constructor() {}
 
-    convertToObj(str) {
-        const x = +str[0];
-        const y = +str[1];
-
-        return { x, y };
-    }
-}
-
-const game = new Game(new Board(), new Settings());
+const game = new Game(new Board());
 
 game.startGame();
 
-console.log(game.move('white', '12', '14'));
-//game.move('black', '57', '55');
-//console.log(game.move('white', '11', '14'));
-
-
-
-
-
-
-
+console.log(game.move('white', '42', '44')); // ход верный (ход пешкой)
+console.log(game.move('black', '47', '45'));  // ход верный (ход пешкой)
+console.log(game.move('white', '62', '63')); // ход верный (ход пешкой)
+console.log(game.move('black', '28', '36')); // ход верный (ход конем)
+console.log(game.move('black', '28', '36')); // ход верный (ход конем)
